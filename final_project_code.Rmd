@@ -22,57 +22,63 @@ knitr::opts_chunk$set(echo = TRUE,
                       fig.pos = 'H', 
                       fig.align = 'center', 
                       fig.height = 3, 
-                      fig.width = 6, 
+                      fig.width = 5.5, 
                       fig.dpi = 300)
 library(ggplot2)
 library(knitr)
 library(dplyr)
 library(testthat)
-library(tidyverse)
+library(tidyr)
 ```
+
+Link to GitHub repository: https://github.com/eahelms/final_project_610
 
 \newpage
 
 # Objectives and Framework
-
+## Goals
 The goal of this project is to use Approximate Bayesian Computation to model 
-disease outbreaks and answer the following questions: Can different outbreaks 
-of the same strain and outbreaks of different molecular strains of the 
-influenza virus be described by the same model of disease spread? To show this 
-goal is accomplished, I will recreate Figures 3a and 3c from Tony and Stumpf, 
-“Simulation based model selection for dynamical systems in systems and 
-population biology”, Bioinformatics (2010).
+disease outbreaks in order to answer the following question: Can different 
+outbreaks  of the same strain and outbreaks of different molecular strains of 
+the influenza virus be described by the same model of disease spread? To 
+accomplish this objective, I will recreate Figures 3a and 3c from Tony and 
+Stumpf, “Simulation based model selection for dynamical systems in systems and 
+population biology”, Bioinformatics (2010) [link in References].
 
-ABC, as seen in the name, is rooted in Bayesian statistics, and is used to 
+## Approximate Bayesian Computation
+ABC, as seen in the name, is rooted in Bayesian statistics and is used to 
 estimate the posterior distributions of model parameters. Theoretically, the 
-steps of the process are as follows.
+steps of the process are given by:
 
 Given the prior distribution $P(\theta)$ of parameter $\theta$, the goal is to 
-approximate the posterior distribution, $P(\theta | D_0) \propto f(D_0|\theta)P(\theta)$ 
-where $f(D_0|\theta)$  is the likelihood of $\theta$ given the data $D_0$. We aim to 
+approximate the posterior distribution, 
+$P(\theta | D_0) \propto f(D_0|\theta)P(\theta)$ 
+where $f(D_0|\theta)$  is the likelihood of $\theta$ given the data $D_0$. We 
+aim to 
 
-(1) Sample a candidate parameter vector $\theta^*$ from prior distribution $P(\theta)$.
+(1) Sample a candidate parameter vector $\theta^*$ from prior distribution 
+$P(\theta)$.
 
 (2) Simulate a dataset $D^*$ from the model described by a conditional
 probability distribution $f(D|\theta^*)$.
 
 (3) Compare the simulated dataset, $D^*$, to the experimental data, $D_0$, using
-a similarity measure, $d$, and tolerance $\epsilon$; if $d(D_0, D^*) \le \epsilon$, 
-accept $\theta^*$. The tolerance $\epsilon \ge 0$ is the desired level of agreement 
-between $D_0$ and $D^*$.
+a similarity measure, $d$, and tolerance $\epsilon$; if 
+$d(D_0, D^*) \le \epsilon$, accept $\theta^*$. The tolerance $\epsilon \ge 0$ is
+the desired level of agreement between $D_0$ and $D^*$.
 
-# Design Decisions and Methodology Implemented
+# Design Decisions and Methodology
 ## Data Setup
-First, I need to setup the supplementary data provided from the 
-paper as dataframes in R, so I can use them in the ABC simulation.
+First, I need to setup the supplementary data provided from additional 
+references as dataframes in R. The columns of the dataframes represent the 
+number of people in each household. The rows represent out of those households, 
+how many of the households had influenza in 1, 2, 3, 4, or 5 of the individuals.
 
-The columns of the dataframes represent the number of people in each household.
-The rows represent out of those households, how many of the households had 
-influenza in 1, 2, 3, 4, or 5 of the individuals.
-
-Reproducing: Table 2: Influenza A ($H_3N_2$) infection in $1977-78$ (middle column) 
-and $1980-1981$ (right column) epidemics, Tecumseh, Michigan [1].
 ```{r,include=F}
+# Reproducing: Table 2: Influenza A ($H_3N_2$) infection in $1977-78$ 
+# (middle column) and $1980-1981$ (right column) epidemics, Tecumseh, Michigan 
+# [1].
+
 table_2_middle = 
   data.frame(matrix(c(
   66, 87, 25, 22, 4,
@@ -101,10 +107,11 @@ rownames(table_2_right) = c("0 infected", "1 infected", "2 infected",
 colnames(table_2_right) = c("1", "2", "3", "4", "5")
 ```
 
-Reproducing: Table 3: Influenza B infection in $1975-76$ epidemic (middle column)
-and influenza A ($H_1N_1$) infection in $1978-79$ epidemic (right column), Seattle, 
-Washington [2].
 ```{r, include=F}
+# Reproducing: Table 3: Influenza B infection in $1975-76$ epidemic (middle 
+# column) and influenza A ($H_1N_1$) infection in $1978-79$ epidemic (right 
+# column), Seattle, Washington [2].
+
 table_3_middle = 
   data.frame(matrix(c(
   9, 12, 18, 9, 4,
@@ -133,23 +140,28 @@ rownames(table_3_right) = c("0 infected", "1 infected", "2 infected",
 colnames(table_3_right) = c("1", "2", "3", "4", "5")
 ```
 
+I did not include the setup in R as output, since it just took up space. 
+Tables can be found in the code file and match the reference material.
+
 ## Understanding the parameters
 The goal here is to compare the outbreak between the disease strains, and then
-plot the  posterior distribution of four parameters. Each outbreak can be modeled
-by two parameters, $q_c$ and $q_h$, where $q_c$ is the probability that a 
-susceptible individual does NOT get infected from the community and $q_h$ is the
-probability that a susceptible individual escapes infection in their OWN HOUSEHOLD. 
+plot the  posterior distribution of four parameters. Each outbreak can be 
+modeled by two parameters, $q_c$ and $q_h$, where $q_c$ is the probability that
+a susceptible individual does NOT get infected from the community and $q_h$ is 
+theprobability that a susceptible individual escapes infection in their own 
+household.
 
 According to the source material paper, we connec the parameters to our data by 
-defining $w_{js}$ as the probability that $j$ out of $s$ suspectible individuals in
-a householde become infected, and is given by
+defining $w_{js}$ as the probability that $j$ out of $s$ suspectible individuals
+in a household become infected, and is given by
 
 $$w_{js} = {s \choose j}w_{jj}(q_cq_h^i)^{s-j}$$
 
-where $w_{0s} = q_c^s$, $s = 0,1,2, \dots$ and $w_{jj} = 1 - \sum_{i=0}^{j-1}w_{ij}$.
+where $w_{0s} = q_c^s$, $s = 0,1,2, \dots$ and 
+$w_{jj} = 1 - \sum_{i=0}^{j-1}w_{ij}$.
 
-With this knowledge, I adjusted my observed data to represent the proportions instead
-of counts of the infected individuals.
+With this knowledge, I adjusted my observed data to represent the proportions 
+instead of counts of the infected individuals.
 
 ```{r}
 t2_mid = sweep(table_2_middle, 2, colSums(table_2_middle), "/")
@@ -170,7 +182,6 @@ $[0, 1]$.
 prior_dist_q = function() runif(n = 1, min = 0, max = 1)
 ```
 
-
 ## Generating data according to a probability model, given the parameters
 A challenge I encountered while building this data generator 
 was understanding $w_{jj}$. After writing out how it would be mathematically on
@@ -183,27 +194,21 @@ $w_{11} = 1 - \sum_{i=0}^{1-1} w_{i1} = 1 - w_{01}$
 $w_{55} = 1 - \sum_{i=0}^{5-1} w_{i1} = 1 - \sum_{i=0}^{4} w_{i1} = 1 - (w_{05}+w_{15}+w_{25}+w_{35}+w_{45})$
 
 ```{r}
-# this is definitely hard-coded, however I couldn't get looping to go my way
-# I'd rather have working code that makes sense instead of broken code
-# indices are different in the paper than they are in R
-
 generate_data = function(qh, qc) {
   # empty matrix, with row and column names to help with indexing
   wjs = matrix(0, nrow = 6, ncol = 5)
   rownames(wjs) = c("0 infected", "1 infected", "2 infected", 
                              "3 infected", "4 infected", "5 infected")
   colnames(wjs) = c("1", "2", "3", "4", "5")
-  
+  # begins the hard coding. I attempted loops, but could not get it working.
   # empty vector of wjj's
-  wjj = rep(0, 6)
-  
+  wjj = rep(0, 5)
   # populate first row of wjs, j = 0, w0s
   for (s in 1:5) {
     wjs[1,s] = qc^s
   }
     # generate w11
     wjj[1] = 1 - wjs[1,1]
-    
     # 2nd row of wjs, j = 1, w1s, 
     for (s in 1:5) {
       wjs[2,s] = choose(s, 1)*wjj[1]*(qc*qh^1)^(s - 1)
@@ -211,7 +216,6 @@ generate_data = function(qh, qc) {
     
     # generate w22
     wjj[2] = 1 - (wjs[1,2] + wjs[2,2])
-    
     # 3rd row of wjs, j = 2, w2s
     for (s in 1:5) {
       wjs[3,s] = choose(s, 2)*wjj[2]*(qc*qh^2)^(s - 2)
@@ -219,7 +223,6 @@ generate_data = function(qh, qc) {
     
     # generate w33
     wjj[3] = 1 - (wjs[1,3] + wjs[2,3] + wjs[3,3])
-    
     # 4th row of wjs, j = 3, w3s
     for (s in 1:5) {
       wjs[4,s] = choose(s, 3)*wjj[3]*(qc*qh^3)^(s - 3)
@@ -227,7 +230,6 @@ generate_data = function(qh, qc) {
     
     # generate w44
     wjj[4] = 1 - (wjs[1,4] + wjs[2,4] + wjs[3,4] + wjs[4,4])
-    
     # 5th row of wjs, j = 4, w4s
     for (s in 1:5) {
       wjs[5,s] = choose(s, 4)*wjj[4]*(qc*qh^4)^(s - 4)
@@ -235,32 +237,31 @@ generate_data = function(qh, qc) {
     
     # generate w55
     wjj[5] = 1 - (wjs[1,5] + wjs[2,5] + wjs[3,5] + wjs[4,5] + wjs[5,5])
-    
     # 6th row of wjs, j = 5, w5s
     for (s in 1:5) {
       wjs[6,s] = choose(s, 5)*wjj[5]*(qc*qh^5)^(s - 5)
     }
   return(wjs)
 }
-
-# q_c1 = prior_dist_q()
-# q_h1 = prior_dist_q()
-# generate_data(q_c1, q_h1)
 ```
 
 ## Constructing a similarity measure
 In the source paper, the authors used the Frobenious norm as their similarity 
-measure. I will be taking a simpler approach, using the 
+measure. However, since this was related to the idea of model selection,
+I will be taking a simpler approach.
 
-We said that if $x_{(i)}$ is the summary statistic resulting from
-simulation i and $x_{(obs)}$ is the summary statistic for the observed data, 
-we keep the parameter from simulation $i$ if 
-$||x_{(i)} - x_{(obs)}|| \le \epsilon$
+We said that if $x_{(i)}$ is the generated data from simulation i and 
+$x_{(obs)}$ is the observed data, we keep the parameter from simulation $i$ if 
+$\sqrt{\sum(x_{(i)} - x_{(obs)})^2} \le \epsilon$.
 
-To examine how many households were surveyed in each scenario and
-help determin my cutoffs for the ABC algorithm, similar to the HW
-(i.e. what should $N*\epsilon$ be $\ge$ to, approximately?)
-
+I want to retain the $N*\epsilon$ "best" estimates. 
+To investigate what $N*\epsilon$ should be $\ge$ to, approximately, for the ABC
+algorithm, I will use our observed data tables to count the number of 
+individuals in the 2 samples, and then take the average between the middle and 
+right column totals. This provides a minimum baseline I can use to compute $N$ 
+inside the ABC simulation function. During simulation I may choose a larger
+number of estimates to retain, since the plots I am attempting to reproduce have
+large data clouds.
 
 ```{r}
 N_vec = c(sum(table_2_middle), sum(table_2_right), sum(table_3_middle),
@@ -268,38 +269,32 @@ N_vec = c(sum(table_2_middle), sum(table_2_right), sum(table_3_middle),
 mean(c(N_vec[1], N_vec[2]))
 ```
 
-For the Table 2 simulation, I want to retain at least 283 observations.
-
+For the Table 2 simulation, I want to retain at least 283 estimates.
 ```{r}
 mean(c(N_vec[3], N_vec[4]))
 ```
-
-For the Table 3 simulation, I want to retain at least 90 observations.
-
-For simulation purposes, I may choose much larger amounts to retain. 
+For the Table 3 simulation, I want to retain at least 90 estimates.
 
 ## Construction of ABC sample framework
-
 ```{r}
 abc_sample = function(observed_data,
                       prior_distribution,
                       data_generating_function,
-                      epsilon, retain) {
-  N = retain/epsilon
-  samples = data.frame(matrix(ncol = 3, nrow = 0))
+                      epsilon, r) {
+  N = r/epsilon # r is the number I want to "retain", or the size
+  samples = data.frame(matrix(ncol = 3, nrow = 0)) # empty df for samples
   colnames(samples) = c("qh", "qc", "error")
-  size = N*epsilon
   
   for (i in 1:N) {
     qc = prior_distribution()
     qh = prior_distribution()
     y = data_generating_function(qh, qc)
-    Error = sqrt(sum((y - observed_data)^2))
+    Error = sqrt(sum((y - observed_data)^2)) # similarity measure
     new_sample = data.frame("qh" = qh, "qc" = qc, "Error" = Error)
     samples = rbind(samples, new_sample)
   }
   samples = arrange(samples, Error)
-  return(samples[1:size, 1:2])
+  return(samples[1:r, 1:2]) # doesn't include error column, can be changed
 }
 
 ```
@@ -307,35 +302,45 @@ abc_sample = function(observed_data,
 # Testing and Evidence
 
 The nice thing about testing for this project is I have quite a clear end goal.
-I need to reproduce plots of $q_c$ vs. $q_h$ from my posterior samples. In the 
-four parameter model, this means a plot that has both $q_{c1}$ vs. $q_{h1}$ and
-$q_{c2}$ vs. $q_{h2}$.
+I need to reproduce plots of $q_c$ vs. $q_h$ from my posterior samples. 
+The plot should have both $q_{c1}$ vs. $q_{h1}$ and $q_{c2}$ vs. $q_{h2}$.
 
 Testing if data generating function is working:
 ```{r}
-# generate_data()
+q_c1 = prior_dist_q()
+q_h1 = prior_dist_q()
+generate_data(q_c1, q_h1) %>% kable() # should produce reasonable wjs table
 ```
+
+I also set up my data generating function in a way that allowed me to check
+piece by piece if the $w_{js}$ matrix was being populated correctly and not 
+breaking anywhere.
 
 ## Posterior Distribution Generation
 ```{r}
 post_t2_mid = abc_sample(observed_data = t2_mid, 
                          prior_distribution = prior_dist_q, 
                          data_generating_function = generate_data, 
-                         epsilon = .1, retain = 1000)
+                         epsilon = .05, r = 1000)
 post_t2_rig = abc_sample(observed_data = t2_rig, 
                          prior_distribution = prior_dist_q, 
                          data_generating_function = generate_data, 
-                         epsilon = .1, retain = 1000)
+                         epsilon = .05, r = 1000)
 post_t3_mid = abc_sample(observed_data = t3_mid, 
                          prior_distribution = prior_dist_q, 
                          data_generating_function = generate_data, 
-                         epsilon = .1, retain = 1000)
+                         epsilon = .05, r = 1000)
 post_t3_rig = abc_sample(observed_data = t3_rig, 
                          prior_distribution = prior_dist_q, 
                          data_generating_function = generate_data, 
-                         epsilon = .1, retain = 1000)
+                         epsilon = .05, r = 1000)
 ```
 
+To test and evaluate the posterior distribution generation process, I ran 
+simulations with $\epsilon \in \{0.01, 0.03, 0.05, 0.1\}$ and "retain" value
+$r \in \{100, 300, 500, 1000, 3000\}$. The most ideal combination when
+it came to efficient run-time and appropriate looking plots was 
+$\epsilon = 0.05$ and $r = 1000$.
 
 ## Reproducing figure 3(a)
 ```{r}
@@ -349,8 +354,9 @@ ggplot(post_plot_table_2) +
   geom_point(aes(qh1_post, qc1_post, colour = "red")) +
   geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
   xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1)) +
-  ggtitle(label = "Figure 3(a)" , subtitle = "ABC posterior distributions for parameters 
-          inferrred from data in Supplementary Table 2")
+  ggtitle(label = "Figure 3(a)" , 
+  subtitle = "ABC posterior distributions for parameters inferrred from data 
+  in Supplementary Table 2")
 ```
 
 ## Reproducing figure 3(b)
@@ -365,11 +371,31 @@ ggplot(post_plot_table_3) +
   geom_point(aes(qh1_post, qc1_post, colour = "red")) +
   geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
   xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1)) +
-  ggtitle(label = "Figure 3(b)" , subtitle = "ABC posterior distributions for parameters 
-          inferrred from data in Supplementary Table 3")
+  ggtitle(label = "Figure 3(b)" , 
+  subtitle = "ABC posterior distributions for parameters inferrred from data 
+  in Supplementary Table 3")
 ```
 
+# Conclusions
+## Results
+We can answer our research questions and conclude that 
 
-# Description
+(1) Different outbreaks of the same strain of the influenza virus can be 
+described by the same model of disease spread, demonstrated in Figure 3(a)
 
-IT'S WORKINGGGG, actually for real, not a Star Wars joke anymore!!!!
+(2) Outbreaks of different molecular strains of the influenza virus are better
+described by different models of disease spread, demonstrated in Figure 3(b).
+
+## Future Work
+It may be reasonable to use different values of $epsilon$ and $r$. Optimizing 
+these quantities in an efficient manner would be useful. 
+
+It would be interesting to develop the ABC process for the parameters
+$q_c$ and $q_h$ using what the reference called ABC SMC, Approximate Bayesian
+Computation for Model Selection.
+
+I would also change the similarity measure to the Frobenious norm, look into the 
+other resource documents on SMC, and attempt to reproduce Figures 3(b) and 3(d).
+
+# References
+https://academic.oup.com/bioinformatics/article/26/1/104/182571 
