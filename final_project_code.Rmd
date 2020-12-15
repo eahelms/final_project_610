@@ -1,17 +1,65 @@
 ---
-title: "Final Project Code"
+title: "Approximate Bayesian Computation for Disease Outbreaks"
+subtitle: "STAT S610"
 author: "Elizabeth (Lizzy) Helms"
-date: "presentation date: 12/08/2020"
-output: html_document
+date: 'Due: 12/15/2020'
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '4'
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, 
+                      comment = NA, 
+                      warning = FALSE, 
+                      message = FALSE, 
+                      fig.pos = 'H', 
+                      fig.align = 'center', 
+                      fig.height = 3, 
+                      fig.width = 6, 
+                      fig.dpi = 300)
 library(ggplot2)
 library(knitr)
 library(dplyr)
+library(testthat)
 ```
 
+# Objectives
+
+The goal of this project is to use Approximate Bayesian Computation to model 
+disease outbreaks and answer the following questions: Can different outbreaks 
+of the same strain and outbreaks of different molecular strains of the 
+influenza virus be described by the same model of disease spread? To show this 
+goal is accomplished, I will recreate Figures 3a and 3c from Tony and Stumpf, 
+“Simulation based model selection for dynamical systems in systems and 
+population biology”, Bioinformatics (2010).
+
+ABC, as seen in the name, is rooted in Bayesian statistics, and is used to 
+estimate the posterior distributions of model parameters. Theoretically, the 
+steps of the process are as follows.
+
+Given the prior distribution $P(\theta)$ of parameter $\theta$, the goal is to 
+approximate the posterior distribution, $P(\theta | D_0) \propto f(D_0|\theta)P(\theta)$ 
+where $f(D_0|\theta)$  is the likelihood of $\theta$ given the data $D_0$. We aim to 
+
+(1) Sample a candidate parameter vector $\theta^*$ from prior distribution $P(\theta)$.
+
+(2) Simulate a dataset $D^*$ from the model described by a conditional
+probability distribution $f(D|\theta^*)$.
+
+(3) Compare the simulated dataset, $D^*$, to the experimental data, $D_0$, using
+a similarity measure, $d$, and tolerance $\epsilon$; if $d(D_0, D^*) \le \epsilon$, 
+accept $\theta^*$. The tolerance $\epsilon \ge 0$ is the desired level of agreement 
+between $D_0$ and $D^*$.
+
+# Design Decisions
+## Data Setup
 First, I need to setup the supplementary data provided from the 
 paper as dataframes in R, so I can use them in the ABC simulation.
 
@@ -19,8 +67,8 @@ The columns of the dataframes represent the number of people in each household.
 The rows represent out of those households, how many of the households had 
 influenza in 1, 2, 3, 4, or 5 of the individuals.
 
-Reproducing: Table 2: Influenza A (H3N2) infection in 1977-78 (middle column) 
-and 1980-81 (right column) epidemics, Tecumseh, Michigan [1].
+Reproducing: Table 2: Influenza A ($H_3N_2$) infection in $1977-78$ (middle column) 
+and $1980-1981$ (right column) epidemics, Tecumseh, Michigan [1].
 ```{r}
 table_2_middle = 
   data.frame(matrix(c(
@@ -50,8 +98,8 @@ rownames(table_2_right) = c("0 infected", "1 infected", "2 infected",
 colnames(table_2_right) = c("1", "2", "3", "4", "5")
 ```
 
-Reproducing: Table 3: Influenza B infection in 1975-76 epidemic (middle column)
-and influenza A (H1N1) infection in 1978-79 epidemic (right column), Seattle, 
+Reproducing: Table 3: Influenza B infection in $1975-76$ epidemic (middle column)
+and influenza A (H1N1) infection in $1978-79$ epidemic (right column), Seattle, 
 Washington [2].
 ```{r}
 table_3_middle = 
@@ -83,6 +131,7 @@ rownames(table_3_right) = c("0 infected", "1 infected", "2 infected",
 colnames(table_3_right) = c("1", "2", "3", "NA", "NA")
 ```
 
+## Understanding of the parameters
 The goal here is to compare the outbreak between the disease strains, and then
 plot the  posterior distribution of four parameters. Understanding what these 
 parameters are and how they should be modeled according to my own knowledge 
@@ -95,7 +144,7 @@ $q_h$ is the probability that a susceptible individual escapes infection in
 their OWN HOUSEHOLD. 
 
 Generic framework:
-- Drawing parameters from a prior distribution
+Drawing parameters from a prior distribution
 
 Prior distributions for all parameters were chosen to be uniform over the range
 [0, 1].
@@ -105,7 +154,7 @@ prior_distribution_all = function() runif(n = 1, min = 0, max = 1)
 ```
 
 
-- Drawing data according to a probability model given the parameters
+## Drawing data according to a probability model given the parameters
 
 ```{r}
 # this is where I am creating the data generating function #
@@ -116,11 +165,11 @@ generate_data = function(h, c) {
 }
 ```
 
-- Computing a similarity measure between the simulated data and an observed 
+## Computing a similarity measure between the simulated data and an observed 
 dataset
 ```{r}
 summary_statistic = mean
-observed_data = table_2_middle # just one, may need to merge #
+observed_data = table_2_middle
 ```
 
 
@@ -129,19 +178,19 @@ as the mean, since in a probabilistic sense this will produce what I need. I
 will compute the distance between the simulated mean and actual mean from 
 observed data. Another candidate is the SSE, which I may test as well. 
 
-- Keeping or discarding the samples based on that similarity 
+Keeping or discarding the samples based on that similarity 
 
 We said that if $x_{(i)}$ is the summary statistic resulting from
 simulation i and $x_{(obs)}$ is the summary statistic for the observed data, 
 we keep the parameter from simulation $i$ if 
-$||x_{(i)} − x_{(obs)}|| \le \epsilon$
+$||x_{(i)} - x_{(obs)}|| \le \epsilon$
 
 To examine how many households were surveyed in each scenario and
 help determin my cutoffs for the ABC algorithm, similar to the HW
 (i.e. what should $N*\epsilon$ be $\ge$ to, approximately?)
 
-From homework 8: "Draw N times from the prior, and retain the parameters 
-corresponding to the ϵN closest matches between x(obs) and x(i). Take 
+From homework 8: Draw N times from the prior, and retain the parameters 
+corresponding to the $\epsilon N$closest matches between $x_{(obs)}$ and $x_{(i)}$. Take 
 $N \ge n$ and $\epsilon \le a$, so that you retain at least $n*a$ samples for the
 posterior.
 
@@ -177,56 +226,15 @@ N = Goal/epsilon
 N
 ```
 
-Beginning the construction of ABC sample framework from the pieces built:
+## Construction of ABC sample framework 
 This is my main missing piece. I have workshopped some structures, but it is not
 complete. 
 
 ```{r}
-abc_sample = function(observed_data,
-    summary_statistic,
-    prior_distribution,
-    data_generating_function,
-    epsilon, N) {
-  i = 1
-  N = # for while condition
-    while(i <= N) {
-        qh1 = prior_distribution()
-        qh2 = prior_distribution()
-        qc1 = prior_distribution()
-        qc2 = prior_distribution()
-        
-        y = data_generating_function(c(qh1, qh2, qc1, qc2))
-        condition = abs(summary_statistic(y) -  summary_statistic(observed_data))
-        # do I need 4 conditions here ? #
-        if(condition < epsilon) {
-            return(theta)
-        }
-    }
-}
 
-abc_sample = function(observed_data,
-    prior_distribution,
-    data_generating_function,
-    epsilon, N) {
-  samples <- data.frame(matrix(ncol = 5, nrow = 0))
-  colnames(samples) = c("qh1", "qh2", "qh3", "qh4", "error")
-  size = N*epsilon
-  
-  for (i in 1:N) {
-    theta = prior_distribution()
-    y = data_generating_function()
-    Error = abs((mean(y) - mean(observed_data)))
-    new_sample = data.frame("p" = theta, "Error" = Error)
-    samples = rbind(samples, new_sample)
-  }
-  samples = arrange(samples, Error)
-  return(samples$p[1:size])
-}
-
-posterior_samples = replicate(n = 1000, abc_sample())
 ```
 
-Testing:
+# Testing and Evidence
 
 The nice thing about testing for this project is I have quite a clear end goal.
 I need to reproduce plots of $q_c$ vs. $q_h$ from my posterior samples. In the 
@@ -235,30 +243,29 @@ $q_{c2}$ vs. $q_{h2}$.
 
 Testing if data generating function is working:
 ```{r}
-generate_data()
+# generate_data()
 ```
 
 Testing simulation using ABC
 ```{r}
-abc_sample(observed_data = , prior_distribution = , data_generating_function = ,
-           epsilon = , N = )
+# abc_sample(observed_data = , prior_distribution = , data_generating_function = ,
+  #         epsilon = , N = )
 ```
 
 
-Testing plots:
 ```{r}
 # this does not run yet, but is the goal framework #
 # this will be done twice, one for each comparison #
-post_plot_table_2 = 
-  data.frame(
-  qc1_post = posterior_samples[,1],
-  qc2_post = posterior_samples[,2],
-  qh1_post = posterior_samples[,3],
-  qh2_post = posterior_samples[,4])
-ggplot(post_plot_table_2) +
-  geom_point(aes(qh1_post, qc1_post, colour = "red")) +
-  geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
-  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
+#post_plot_table_2 = 
+ # data.frame(
+  #qc1_post = posterior_samples[,1],
+  #qc2_post = posterior_samples[,2],
+  #qh1_post = posterior_samples[,3],
+  #qh2_post = posterior_samples[,4])
+#ggplot(post_plot_table_2) +
+ # geom_point(aes(qh1_post, qc1_post, colour = "red")) +
+#  geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
+ # xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
 ```
 
 Arbitrary plot simulation for presentation:
@@ -295,3 +302,8 @@ ggplot(df_post_test2) +
   geom_point(aes(x4, y4, colour = "blue")) +
   xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
 ```
+
+
+# Description
+
+IT'S WORKINGGGG
