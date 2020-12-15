@@ -1,0 +1,297 @@
+---
+title: "Final Project Code"
+author: "Elizabeth (Lizzy) Helms"
+date: "presentation date: 12/08/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(knitr)
+library(dplyr)
+```
+
+First, I need to setup the supplementary data provided from the 
+paper as dataframes in R, so I can use them in the ABC simulation.
+
+The columns of the dataframes represent the number of people in each household.
+The rows represent out of those households, how many of the households had 
+influenza in 1, 2, 3, 4, or 5 of the individuals.
+
+Reproducing: Table 2: Influenza A (H3N2) infection in 1977-78 (middle column) 
+and 1980-81 (right column) epidemics, Tecumseh, Michigan [1].
+```{r}
+table_2_middle = 
+  data.frame(matrix(c(
+  66, 87, 25, 22, 4,
+  13, 14, 15, 9, 4,
+  NA, 4, 4, 9, 1,
+  NA, NA, 4, 3, 1,
+  NA, NA, NA, 1, 1, 
+  NA, NA, NA, NA, 0), 
+  ncol = 5, byrow = T))
+
+table_2_right = 
+  data.frame(matrix(c(
+    44, 62, 47, 38, 9, 
+    10, 13, 8, 11, 5,
+    NA, 9, 2, 7, 3, 
+    NA, NA, 3, 5, 1,
+    NA, NA, NA, 1, 0,
+    NA, NA, NA, NA, 1), 
+    ncol = 5, byrow = T))
+
+rownames(table_2_middle) = c("0 infected", "1 infected", "2 infected",
+                             "3 infected", "4 infected", "5 infected")
+colnames(table_2_middle) = c("1", "2", "3", "4", "5")
+rownames(table_2_right) = c("0 infected", "1 infected", "2 infected",
+                            "3 infected", "4 infected", "5 infected")
+colnames(table_2_right) = c("1", "2", "3", "4", "5")
+```
+
+Reproducing: Table 3: Influenza B infection in 1975-76 epidemic (middle column)
+and influenza A (H1N1) infection in 1978-79 epidemic (right column), Seattle, 
+Washington [2].
+```{r}
+table_3_middle = 
+  data.frame(matrix(c(
+  9, 12, 18, 9, 4,
+  1, 6, 6, 4, 3,
+  NA, 2, 3, 4, 0,
+  NA, NA, 1, 3, 2,
+  NA, NA, NA, 0, 0,
+  NA, NA, NA, NA, 0), 
+  ncol = 5, byrow = T))
+# should lower part of the matrix be NA, 0?
+
+table_3_right = 
+  data.frame(matrix(c(
+   15, 12, 4, NA, NA,
+   11, 17, 4, NA, NA, 
+   NA, 21, 4, NA, NA,
+   NA, NA, 5, NA, NA,
+   NA, NA, NA, NA, NA,
+   NA, NA, NA, NA, NA), 
+   ncol = 5, byrow = T))
+
+rownames(table_3_middle) = c("0 infected", "1 infected", "2 infected", 
+                             "3 infected", "4 infected", "5 infected")
+colnames(table_3_middle) = c("1", "2", "3", "4", "5")
+rownames(table_3_right) = c("0 infected", "1 infected", "2 infected", 
+                            "3 infected", "4 infected", "5 infected")
+colnames(table_3_right) = c("1", "2", "3", "NA", "NA")
+```
+
+The goal here is to compare the outbreak between the disease strains, and then
+plot the  posterior distribution of four parameters. Understanding what these 
+parameters are and how they should be modeled according to my own knowledge 
+and the source material was one of the more challenging aspects. 
+
+$q_c$ is the probability that a susceptible individual does NOT get infected
+from the community.
+
+$q_h$ is the probability that a susceptible individual escapes infection in 
+their OWN HOUSEHOLD. 
+
+Generic framework:
+- Drawing parameters from a prior distribution
+
+Prior distributions for all parameters were chosen to be uniform over the range
+[0, 1].
+
+```{r}
+prior_distribution_all = function() runif(n = 1, min = 0, max = 1)
+```
+
+
+- Drawing data according to a probability model given the parameters
+
+```{r}
+# this is where I am creating the data generating function #
+# needs to take the 4 parameters as arguments #
+# theory comes from paper #
+generate_data = function(h, c) {
+  
+}
+```
+
+- Computing a similarity measure between the simulated data and an observed 
+dataset
+```{r}
+summary_statistic = mean
+observed_data = table_2_middle # just one, may need to merge #
+```
+
+
+The similarity measure I'm using will be constructed with the summary statistic 
+as the mean, since in a probabilistic sense this will produce what I need. I 
+will compute the distance between the simulated mean and actual mean from 
+observed data. Another candidate is the SSE, which I may test as well. 
+
+- Keeping or discarding the samples based on that similarity 
+
+We said that if $x_{(i)}$ is the summary statistic resulting from
+simulation i and $x_{(obs)}$ is the summary statistic for the observed data, 
+we keep the parameter from simulation $i$ if 
+$||x_{(i)} − x_{(obs)}|| \le \epsilon$
+
+To examine how many households were surveyed in each scenario and
+help determin my cutoffs for the ABC algorithm, similar to the HW
+(i.e. what should $N*\epsilon$ be $\ge$ to, approximately?)
+
+From homework 8: "Draw N times from the prior, and retain the parameters 
+corresponding to the ϵN closest matches between x(obs) and x(i). Take 
+$N \ge n$ and $\epsilon \le a$, so that you retain at least $n*a$ samples for the
+posterior.
+
+```{r}
+N_vec = c(
+  sum(table_2_middle, na.rm = T),
+  sum(table_2_right, na.rm = T),
+  sum(table_3_middle, na.rm = T),
+  sum(table_3_right, na.rm = T))
+N_vec
+mean(c(N_vec[1], N_vec[2]))
+```
+
+For the Table 2 simulation, I want to retain approximately 283, or 300
+observations.
+```{r}
+Goal = 300
+epsilon = .1 # can vary
+N = Goal/epsilon
+N
+```
+
+```{r}
+mean(c(N_vec[3], N_vec[4]))
+```
+
+For the Table 3 simulation, I want to retain approximately 90, or 100
+observations.
+```{r}
+Goal = 100
+epsilon = .1 # can vary
+N = Goal/epsilon
+N
+```
+
+Beginning the construction of ABC sample framework from the pieces built:
+This is my main missing piece. I have workshopped some structures, but it is not
+complete. 
+
+```{r}
+abc_sample = function(observed_data,
+    summary_statistic,
+    prior_distribution,
+    data_generating_function,
+    epsilon, N) {
+  i = 1
+  N = # for while condition
+    while(i <= N) {
+        qh1 = prior_distribution()
+        qh2 = prior_distribution()
+        qc1 = prior_distribution()
+        qc2 = prior_distribution()
+        
+        y = data_generating_function(c(qh1, qh2, qc1, qc2))
+        condition = abs(summary_statistic(y) -  summary_statistic(observed_data))
+        # do I need 4 conditions here ? #
+        if(condition < epsilon) {
+            return(theta)
+        }
+    }
+}
+
+abc_sample = function(observed_data,
+    prior_distribution,
+    data_generating_function,
+    epsilon, N) {
+  samples <- data.frame(matrix(ncol = 5, nrow = 0))
+  colnames(samples) = c("qh1", "qh2", "qh3", "qh4", "error")
+  size = N*epsilon
+  
+  for (i in 1:N) {
+    theta = prior_distribution()
+    y = data_generating_function()
+    Error = abs((mean(y) - mean(observed_data)))
+    new_sample = data.frame("p" = theta, "Error" = Error)
+    samples = rbind(samples, new_sample)
+  }
+  samples = arrange(samples, Error)
+  return(samples$p[1:size])
+}
+
+posterior_samples = replicate(n = 1000, abc_sample())
+```
+
+Testing:
+
+The nice thing about testing for this project is I have quite a clear end goal.
+I need to reproduce plots of $q_c$ vs. $q_h$ from my posterior samples. In the 
+four parameter model, this means a plot that has both $q_{c1}$ vs. $q_{h1}$ and
+$q_{c2}$ vs. $q_{h2}$.
+
+Testing if data generating function is working:
+```{r}
+generate_data()
+```
+
+Testing simulation using ABC
+```{r}
+abc_sample(observed_data = , prior_distribution = , data_generating_function = ,
+           epsilon = , N = )
+```
+
+
+Testing plots:
+```{r}
+# this does not run yet, but is the goal framework #
+# this will be done twice, one for each comparison #
+post_plot_table_2 = 
+  data.frame(
+  qc1_post = posterior_samples[,1],
+  qc2_post = posterior_samples[,2],
+  qh1_post = posterior_samples[,3],
+  qh2_post = posterior_samples[,4])
+ggplot(post_plot_table_2) +
+  geom_point(aes(qh1_post, qc1_post, colour = "red")) +
+  geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
+  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
+```
+
+Arbitrary plot simulation for presentation:
+```{r}
+# since I don't have simulated posteriors #
+seq_test = seq(from = 0.5, to = 1, by = 0.01)
+x1 = sample(seq_test, 100, replace = T)
+y1 = sample(seq_test, 100, replace = T)
+
+x2 = sample(seq_test, 100, replace = T)
+y2 = sample(seq_test, 100, replace = T)
+
+df_post_test1 = data.frame(x1, x2, y1, y2)
+
+ggplot(df_post_test1) +
+  geom_point(aes(x1, y1, colour = "red")) +
+  geom_point(aes(x2, y2, colour = "blue")) +
+  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
+
+seq_test2 = seq(from = 0.3, to = 0.7, by = 0.01)
+seq_test3 = seq(from = 0.4, to = 1, by = 0.01)
+seq_test4 = seq(from = 0.75, to = 0.95, by = 0.01)
+
+x3 = sample(seq_test3, 100, replace = T)
+y3 = sample(seq_test2, 100, replace = T)
+
+x4 = sample(seq_test4, 100, replace = T)
+y4 = sample(seq_test4, 100, replace = T)
+
+df_post_test2 = data.frame(x3, x4, y3, y4)
+
+ggplot(df_post_test2) +
+  geom_point(aes(x3, y3, colour = "red")) +
+  geom_point(aes(x4, y4, colour = "blue")) +
+  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
+```
