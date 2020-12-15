@@ -30,7 +30,9 @@ library(dplyr)
 library(testthat)
 ```
 
-# Objectives
+\newpage
+
+# Objectives and Framework
 
 The goal of this project is to use Approximate Bayesian Computation to model 
 disease outbreaks and answer the following questions: Can different outbreaks 
@@ -58,7 +60,7 @@ a similarity measure, $d$, and tolerance $\epsilon$; if $d(D_0, D^*) \le \epsilo
 accept $\theta^*$. The tolerance $\epsilon \ge 0$ is the desired level of agreement 
 between $D_0$ and $D^*$.
 
-# Design Decisions
+# Design Decisions and Methodology Implemented
 ## Data Setup
 First, I need to setup the supplementary data provided from the 
 paper as dataframes in R, so I can use them in the ABC simulation.
@@ -74,20 +76,20 @@ table_2_middle =
   data.frame(matrix(c(
   66, 87, 25, 22, 4,
   13, 14, 15, 9, 4,
-  NA, 4, 4, 9, 1,
-  NA, NA, 4, 3, 1,
-  NA, NA, NA, 1, 1, 
-  NA, NA, NA, NA, 0), 
+  0, 4, 4, 9, 1,
+  0, 0, 4, 3, 1,
+  0, 0, 0, 1, 1, 
+  0, 0, 0, 0, 0), 
   ncol = 5, byrow = T))
 
 table_2_right = 
   data.frame(matrix(c(
     44, 62, 47, 38, 9, 
     10, 13, 8, 11, 5,
-    NA, 9, 2, 7, 3, 
-    NA, NA, 3, 5, 1,
-    NA, NA, NA, 1, 0,
-    NA, NA, NA, NA, 1), 
+    0, 9, 2, 7, 3, 
+    0, 0, 3, 5, 1,
+    0, 0, 0, 1, 0,
+    0, 0, 0, 0, 1), 
     ncol = 5, byrow = T))
 
 rownames(table_2_middle) = c("0 infected", "1 infected", "2 infected",
@@ -99,28 +101,27 @@ colnames(table_2_right) = c("1", "2", "3", "4", "5")
 ```
 
 Reproducing: Table 3: Influenza B infection in $1975-76$ epidemic (middle column)
-and influenza A (H1N1) infection in $1978-79$ epidemic (right column), Seattle, 
+and influenza A ($H_1N_1$) infection in $1978-79$ epidemic (right column), Seattle, 
 Washington [2].
 ```{r}
 table_3_middle = 
   data.frame(matrix(c(
   9, 12, 18, 9, 4,
   1, 6, 6, 4, 3,
-  NA, 2, 3, 4, 0,
-  NA, NA, 1, 3, 2,
-  NA, NA, NA, 0, 0,
-  NA, NA, NA, NA, 0), 
+  0, 2, 3, 4, 0,
+  0, 0, 1, 3, 2,
+  0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0), 
   ncol = 5, byrow = T))
-# should lower part of the matrix be NA, 0?
 
 table_3_right = 
   data.frame(matrix(c(
-   15, 12, 4, NA, NA,
-   11, 17, 4, NA, NA, 
-   NA, 21, 4, NA, NA,
-   NA, NA, 5, NA, NA,
-   NA, NA, NA, NA, NA,
-   NA, NA, NA, NA, NA), 
+   15, 12, 4, 0, 0,
+   11, 17, 4, 0, 0, 
+   0, 21, 4, 0, 0,
+   0, 0, 5, 0, 0,
+   0, 0, 0, 0, 0,
+   0, 0, 0, 0, 0), 
    ncol = 5, byrow = T))
 
 rownames(table_3_middle) = c("0 infected", "1 infected", "2 infected", 
@@ -128,26 +129,41 @@ rownames(table_3_middle) = c("0 infected", "1 infected", "2 infected",
 colnames(table_3_middle) = c("1", "2", "3", "4", "5")
 rownames(table_3_right) = c("0 infected", "1 infected", "2 infected", 
                             "3 infected", "4 infected", "5 infected")
-colnames(table_3_right) = c("1", "2", "3", "NA", "NA")
+colnames(table_3_right) = c("1", "2", "3", "4", "5")
 ```
 
 ## Understanding of the parameters
 The goal here is to compare the outbreak between the disease strains, and then
-plot the  posterior distribution of four parameters. Understanding what these 
-parameters are and how they should be modeled according to my own knowledge 
-and the source material was one of the more challenging aspects. 
+plot the  posterior distribution of four parameters. Each outbreak can be modeled
+by two parameters, $q_c$ and $q_h$, where $q_c$ is the probability that a 
+susceptible individual does NOT get infected from the community and $q_h$ is the
+probability that a susceptible individual escapes infection in their OWN HOUSEHOLD. 
 
-$q_c$ is the probability that a susceptible individual does NOT get infected
-from the community.
+According to the source material paper, we connec the parameters to our data by 
+defining $w_{js}$ as the probability that $j$ out of $s$ suspectible individuals in
+a householde become infected, and is given by
 
-$q_h$ is the probability that a susceptible individual escapes infection in 
-their OWN HOUSEHOLD. 
+$$w_{js} = {s \choose j}w_{jj}(q_cq_h^i)^{s-j}$$
 
-Generic framework:
-Drawing parameters from a prior distribution
+where $w_{0s} = q_c^s$, $s = 0,1,2, \dots$ and $w_{jj} = 1 - \sum_{i=0}^{j-1}w_{ij}$.
+
+With this knowledge, I adjusted my observed data to represent the proportions instead
+of counts of the infected individuals.
+
+```{r}
+t2_mid = sweep(table_2_middle, 2, colSums(table_2_middle), "/")
+t2_rig = sweep(table_2_right, 2, colSums(table_2_right), "/")
+t3_mid = sweep(table_3_middle, 2, colSums(table_3_middle), "/")
+t3_rig = sweep(table_3_right, 2, colSums(table_3_right), "/")
+
+# t3_rig has some NaN because of dividing by 0, coercing those back to 0
+t3_rig[,4:5] = 0
+```
+
+## Drawing parameters from a prior distribution
 
 Prior distributions for all parameters were chosen to be uniform over the range
-[0, 1].
+$[0, 1]$. 
 
 ```{r}
 prior_distribution_all = function() runif(n = 1, min = 0, max = 1)
@@ -157,16 +173,18 @@ prior_distribution_all = function() runif(n = 1, min = 0, max = 1)
 ## Drawing data according to a probability model given the parameters
 
 ```{r}
-# this is where I am creating the data generating function #
+# creating the data generating function #
 # needs to take the 4 parameters as arguments #
 # theory comes from paper #
-generate_data = function(h, c) {
+generate_data = function(h, c, i) {
   
 }
 ```
 
-## Computing a similarity measure between the simulated data and an observed 
-dataset
+## Computing a similarity measure between the simulated data and an observed dataset
+In the source paper, the authors used the Frobenious norm as their similarity 
+measure. I will be taking a simpler approach.
+
 ```{r}
 summary_statistic = mean
 observed_data = table_2_middle
@@ -227,8 +245,7 @@ N
 ```
 
 ## Construction of ABC sample framework 
-This is my main missing piece. I have workshopped some structures, but it is not
-complete. 
+
 
 ```{r}
 
