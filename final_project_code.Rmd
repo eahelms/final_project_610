@@ -72,7 +72,7 @@ influenza in 1, 2, 3, 4, or 5 of the individuals.
 
 Reproducing: Table 2: Influenza A ($H_3N_2$) infection in $1977-78$ (middle column) 
 and $1980-1981$ (right column) epidemics, Tecumseh, Michigan [1].
-```{r}
+```{r,include=F}
 table_2_middle = 
   data.frame(matrix(c(
   66, 87, 25, 22, 4,
@@ -104,7 +104,7 @@ colnames(table_2_right) = c("1", "2", "3", "4", "5")
 Reproducing: Table 3: Influenza B infection in $1975-76$ epidemic (middle column)
 and influenza A ($H_1N_1$) infection in $1978-79$ epidemic (right column), Seattle, 
 Washington [2].
-```{r}
+```{r, include=F}
 table_3_middle = 
   data.frame(matrix(c(
   9, 12, 18, 9, 4,
@@ -133,7 +133,7 @@ rownames(table_3_right) = c("0 infected", "1 infected", "2 infected",
 colnames(table_3_right) = c("1", "2", "3", "4", "5")
 ```
 
-## Understanding of the parameters
+## Understanding the parameters
 The goal here is to compare the outbreak between the disease strains, and then
 plot the  posterior distribution of four parameters. Each outbreak can be modeled
 by two parameters, $q_c$ and $q_h$, where $q_c$ is the probability that a 
@@ -183,12 +183,12 @@ $w_{11} = 1 - \sum_{i=0}^{1-1} w_{i1} = 1 - w_{01}$
 $w_{55} = 1 - \sum_{i=0}^{5-1} w_{i1} = 1 - \sum_{i=0}^{4} w_{i1} = 1 - (w_{05}+w_{15}+w_{25}+w_{35}+w_{45})$
 
 ```{r}
-qh = runif(1, 0, 1)
-# this is definitely hard-coded. I am working on trying to have a cleaner loop
+# this is definitely hard-coded, however I couldn't get looping to go my way
+# I'd rather have working code that makes sense instead of broken code
+# indices are different in the paper than they are in R
 
 generate_data = function(qh, qc) {
-  # empty matrix, with row and column names to help me not get 
-  # confused with indexing
+  # empty matrix, with row and column names to help with indexing
   wjs = matrix(0, nrow = 6, ncol = 5)
   rownames(wjs) = c("0 infected", "1 infected", "2 infected", 
                              "3 infected", "4 infected", "5 infected")
@@ -197,14 +197,14 @@ generate_data = function(qh, qc) {
   # empty vector of wjj's
   wjj = rep(0, 6)
   
-  # populate first row of wjs, j=0, w0s
+  # populate first row of wjs, j = 0, w0s
   for (s in 1:5) {
     wjs[1,s] = qc^s
   }
     # generate w11
     wjj[1] = 1 - wjs[1,1]
     
-    # 2nd row of wjs, j=1, w1s, 
+    # 2nd row of wjs, j = 1, w1s, 
     for (s in 1:5) {
       wjs[2,s] = choose(s, 1)*wjj[1]*(qc*qh^1)^(s - 1)
     }
@@ -212,7 +212,7 @@ generate_data = function(qh, qc) {
     # generate w22
     wjj[2] = 1 - (wjs[1,2] + wjs[2,2])
     
-    # 3rd row of wjs, j=2, w2s
+    # 3rd row of wjs, j = 2, w2s
     for (s in 1:5) {
       wjs[3,s] = choose(s, 2)*wjj[2]*(qc*qh^2)^(s - 2)
     }
@@ -220,7 +220,7 @@ generate_data = function(qh, qc) {
     # generate w33
     wjj[3] = 1 - (wjs[1,3] + wjs[2,3] + wjs[3,3])
     
-    # 4th row of wjs, j=3, w3s
+    # 4th row of wjs, j = 3, w3s
     for (s in 1:5) {
       wjs[4,s] = choose(s, 3)*wjj[3]*(qc*qh^3)^(s - 3)
     }
@@ -228,7 +228,7 @@ generate_data = function(qh, qc) {
     # generate w44
     wjj[4] = 1 - (wjs[1,4] + wjs[2,4] + wjs[3,4] + wjs[4,4])
     
-    # 5th row of wjs, j=4, w4s
+    # 5th row of wjs, j = 4, w4s
     for (s in 1:5) {
       wjs[5,s] = choose(s, 4)*wjj[4]*(qc*qh^4)^(s - 4)
     }
@@ -236,7 +236,7 @@ generate_data = function(qh, qc) {
     # generate w55
     wjj[5] = 1 - (wjs[1,5] + wjs[2,5] + wjs[3,5] + wjs[4,5] + wjs[5,5])
     
-    # 6th row of wjs, j=5, w5s
+    # 6th row of wjs, j = 5, w5s
     for (s in 1:5) {
       wjs[6,s] = choose(s, 5)*wjj[5]*(qc*qh^5)^(s - 5)
     }
@@ -248,16 +248,9 @@ generate_data = function(qh, qc) {
 # generate_data(q_c1, q_h1)
 ```
 
-## Computing a similarity measure between the simulated data and an observed dataset
+## Constructing a similarity measure
 In the source paper, the authors used the Frobenious norm as their similarity 
-measure. I will be taking a simpler approach.
-
-The similarity measure I'm using will be constructed with the summary statistic 
-as the mean, since in a probabilistic sense this will produce what I need. I 
-will compute the distance between the simulated mean and actual mean from 
-observed data. Another candidate is the SSE, which I may test as well. 
-
-Keeping or discarding the samples based on that similarity 
+measure. I will be taking a simpler approach, using the 
 
 We said that if $x_{(i)}$ is the summary statistic resulting from
 simulation i and $x_{(obs)}$ is the summary statistic for the observed data, 
@@ -270,41 +263,44 @@ help determin my cutoffs for the ABC algorithm, similar to the HW
 
 
 ```{r}
-N_vec = c(
-  sum(table_2_middle, na.rm = T),
-  sum(table_2_right, na.rm = T),
-  sum(table_3_middle, na.rm = T),
-  sum(table_3_right, na.rm = T))
-N_vec
+N_vec = c(sum(table_2_middle), sum(table_2_right), sum(table_3_middle),
+  sum(table_3_right))
 mean(c(N_vec[1], N_vec[2]))
 ```
 
-For the Table 2 simulation, I want to retain approximately 283, or 300
-observations.
-```{r}
-Goal = 300
-epsilon = .1 # can vary
-N = Goal/epsilon
-N
-```
+For the Table 2 simulation, I want to retain at least 283 observations.
 
 ```{r}
 mean(c(N_vec[3], N_vec[4]))
 ```
 
-For the Table 3 simulation, I want to retain approximately 90, or 100
-observations.
-```{r}
-Goal = 100
-epsilon = .1 # can vary
-N = Goal/epsilon
-N
-```
+For the Table 3 simulation, I want to retain at least 90 observations.
 
-## Construction of ABC sample framework 
+For simulation purposes, I may choose much larger amounts to retain. 
 
+## Construction of ABC sample framework
 
 ```{r}
+abc_sample = function(observed_data,
+                      prior_distribution,
+                      data_generating_function,
+                      epsilon, retain) {
+  N = retain/epsilon
+  samples = data.frame(matrix(ncol = 3, nrow = 0))
+  colnames(samples) = c("qh", "qc", "error")
+  size = N*epsilon
+  
+  for (i in 1:N) {
+    qc = prior_distribution()
+    qh = prior_distribution()
+    y = data_generating_function(qh, qc)
+    Error = sqrt(sum((y - observed_data)^2))
+    new_sample = data.frame("qh" = qh, "qc" = qc, "Error" = Error)
+    samples = rbind(samples, new_sample)
+  }
+  samples = arrange(samples, Error)
+  return(samples[1:size, 1:2])
+}
 
 ```
 
@@ -320,64 +316,60 @@ Testing if data generating function is working:
 # generate_data()
 ```
 
-Testing simulation using ABC
+## Posterior Distribution Generation
 ```{r}
-# abc_sample(observed_data = , prior_distribution = , data_generating_function = ,
-  #         epsilon = , N = )
+post_t2_mid = abc_sample(observed_data = t2_mid, 
+                         prior_distribution = prior_dist_q, 
+                         data_generating_function = generate_data, 
+                         epsilon = .1, retain = 1000)
+post_t2_rig = abc_sample(observed_data = t2_rig, 
+                         prior_distribution = prior_dist_q, 
+                         data_generating_function = generate_data, 
+                         epsilon = .1, retain = 1000)
+post_t3_mid = abc_sample(observed_data = t3_mid, 
+                         prior_distribution = prior_dist_q, 
+                         data_generating_function = generate_data, 
+                         epsilon = .1, retain = 1000)
+post_t3_rig = abc_sample(observed_data = t3_rig, 
+                         prior_distribution = prior_dist_q, 
+                         data_generating_function = generate_data, 
+                         epsilon = .1, retain = 1000)
 ```
 
 
+## Reproducing figure 3(a)
 ```{r}
-# this does not run yet, but is the goal framework #
-# this will be done twice, one for each comparison #
-#post_plot_table_2 = 
- # data.frame(
-  #qc1_post = posterior_samples[,1],
-  #qc2_post = posterior_samples[,2],
-  #qh1_post = posterior_samples[,3],
-  #qh2_post = posterior_samples[,4])
-#ggplot(post_plot_table_2) +
- # geom_point(aes(qh1_post, qc1_post, colour = "red")) +
-#  geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
- # xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
+post_plot_table_2 = 
+ data.frame(
+  qh1_post = post_t2_mid$qh,
+  qh2_post = post_t2_rig$qh,
+  qc1_post = post_t2_mid$qc,
+  qc2_post = post_t2_rig$qc)
+ggplot(post_plot_table_2) +
+  geom_point(aes(qh1_post, qc1_post, colour = "red")) +
+  geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
+  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1)) +
+  ggtitle(label = "Figure 3(a)" , subtitle = "ABC posterior distributions for parameters 
+          inferrred from data in Supplementary Table 2")
 ```
 
-Arbitrary plot simulation for presentation:
+## Reproducing figure 3(b)
 ```{r}
-# since I don't have simulated posteriors #
-seq_test = seq(from = 0.5, to = 1, by = 0.01)
-x1 = sample(seq_test, 100, replace = T)
-y1 = sample(seq_test, 100, replace = T)
-
-x2 = sample(seq_test, 100, replace = T)
-y2 = sample(seq_test, 100, replace = T)
-
-df_post_test1 = data.frame(x1, x2, y1, y2)
-
-ggplot(df_post_test1) +
-  geom_point(aes(x1, y1, colour = "red")) +
-  geom_point(aes(x2, y2, colour = "blue")) +
-  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
-
-seq_test2 = seq(from = 0.3, to = 0.7, by = 0.01)
-seq_test3 = seq(from = 0.4, to = 1, by = 0.01)
-seq_test4 = seq(from = 0.75, to = 0.95, by = 0.01)
-
-x3 = sample(seq_test3, 100, replace = T)
-y3 = sample(seq_test2, 100, replace = T)
-
-x4 = sample(seq_test4, 100, replace = T)
-y4 = sample(seq_test4, 100, replace = T)
-
-df_post_test2 = data.frame(x3, x4, y3, y4)
-
-ggplot(df_post_test2) +
-  geom_point(aes(x3, y3, colour = "red")) +
-  geom_point(aes(x4, y4, colour = "blue")) +
-  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1))
+post_plot_table_3 = 
+ data.frame(
+  qh1_post = post_t3_mid$qh,
+  qh2_post = post_t3_rig$qh,
+  qc1_post = post_t3_mid$qc,
+  qc2_post = post_t3_rig$qc)
+ggplot(post_plot_table_3) +
+  geom_point(aes(qh1_post, qc1_post, colour = "red")) +
+  geom_point(aes(qh2_post, qc2_post, colour = "blue")) +
+  xlab("q_h") + ylab("q_c") + xlim(c(0, 1)) + ylim(c(0,1)) +
+  ggtitle(label = "Figure 3(b)" , subtitle = "ABC posterior distributions for parameters 
+          inferrred from data in Supplementary Table 3")
 ```
 
 
 # Description
 
-IT'S WORKINGGGG
+IT'S WORKINGGGG, actually for real, not a Star Wars joke anymore!!!!
