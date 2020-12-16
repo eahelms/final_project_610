@@ -232,7 +232,7 @@ generate_data = function(qh, qc) {
 }
 ```
 
-## Constructing a similarity measure
+## Constructing a Similarity Measure
 In the source paper, the authors used the Frobenious norm as their similarity 
 measure. However, since this was related to the idea of model selection,
 I will be taking a simpler approach.
@@ -260,7 +260,7 @@ mean(c(N_vec[1], N_vec[2]))
 mean(c(N_vec[3], N_vec[4]))
 ```
 
-## Construction of ABC sample framework
+## Construction of ABC Sample Framework
 ```{r}
 abc_sample = function(observed_data,
                       prior_distribution,
